@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /school-management-system/
+
+Sitemap: https://brookviewridgeschools.totalh.net/sitemap.xml

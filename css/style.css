@@ -685,6 +685,7 @@ p { margin: 0 0 1rem; color: var(--ink-soft); }
   height: 100%;
   transition: transform .2s ease, box-shadow .2s ease;
 }
+a.news-card { display: block; color: inherit; text-decoration: none; }
 .news-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
 .news-media { aspect-ratio: 16/10; }
 .news-body { padding: 1.5rem; }
@@ -699,6 +700,47 @@ p { margin: 0 0 1rem; color: var(--ink-soft); }
 }
 .news-date { font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 0.5rem; display: block; }
 .news-body h4 { font-size: 1.02rem; }
+
+/* ---- News search + pagination (news-events.html / news-article.html) --------------------------- */
+.news-search { display: none; gap: 0.6rem; max-width: 420px; margin: 2rem auto 0; }
+.news-search input {
+  flex: 1;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--white);
+}
+.news-search input:focus { outline: none; border-color: var(--gold); }
+.news-search button {
+  border: none;
+  background: var(--forest);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background .16s ease;
+}
+.news-search button:hover { background: var(--forest-dark); }
+
+.news-pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 2.5rem; flex-wrap: wrap; }
+.news-page-btn {
+  border: 1px solid var(--border-soft);
+  background: var(--white);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all .16s ease;
+}
+.news-page-btn:hover { border-color: var(--gold); color: var(--forest-dark); }
+.news-page-btn.active { background: var(--forest); border-color: var(--forest); color: #fff; }
 
 /* ---- CTA band --------------------------------------------------------------------------------- */
 .cta-band {

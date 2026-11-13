@@ -84,15 +84,18 @@
     });
 
     /* ---- Gallery filter ------------------------------------------------------ */
+    /* Delegated on the grid container (never replaced, only its contents are) and queried live
+       on every click, so this keeps working after the Gallery's real photos load in below and
+       replace the fallback markup — no rebinding needed. */
     var filterBtns = document.querySelectorAll(".gallery-filter-btn");
-    var galleryItems = document.querySelectorAll(".gallery-item");
-    if (filterBtns.length && galleryItems.length) {
+    var galleryGrid = document.querySelector("[data-gallery-grid]");
+    if (filterBtns.length && galleryGrid) {
       filterBtns.forEach(function (btn) {
         btn.addEventListener("click", function () {
           filterBtns.forEach(function (b) { b.classList.remove("active"); });
           btn.classList.add("active");
           var cat = btn.getAttribute("data-filter");
-          galleryItems.forEach(function (item) {
+          galleryGrid.querySelectorAll(".gallery-item").forEach(function (item) {
             var show = cat === "all" || item.getAttribute("data-category") === cat;
             item.style.display = show ? "" : "none";
           });
@@ -101,24 +104,25 @@
     }
 
     /* ---- Lightbox ---------------------------------------------------------------- */
+    /* Delegated on document so it also covers gallery items that load in dynamically below. */
     var lightbox = document.querySelector(".lightbox-overlay");
     if (lightbox) {
       var lightboxBody = lightbox.querySelector(".lightbox-box");
-      document.querySelectorAll("[data-lightbox-trigger]").forEach(function (trigger) {
-        trigger.addEventListener("click", function () {
-          var html = trigger.querySelector(".photo-placeholder, img");
-          if (html && lightboxBody) {
-            var clone = html.cloneNode(true);
-            var existing = lightboxBody.querySelector(".photo-placeholder, img");
-            if (existing) existing.remove();
-            lightboxBody.insertBefore(clone, lightboxBody.querySelector(".lightbox-caption"));
-            var caption = trigger.getAttribute("data-caption") || "";
-            var captionEl = lightboxBody.querySelector(".lightbox-caption");
-            if (captionEl) captionEl.textContent = caption;
-          }
-          lightbox.classList.add("open");
-          document.body.style.overflow = "hidden";
-        });
+      document.addEventListener("click", function (e) {
+        var trigger = e.target.closest("[data-lightbox-trigger]");
+        if (!trigger) return;
+        var html = trigger.querySelector(".photo-placeholder, img");
+        if (html && lightboxBody) {
+          var clone = html.cloneNode(true);
+          var existing = lightboxBody.querySelector(".photo-placeholder, img");
+          if (existing) existing.remove();
+          lightboxBody.insertBefore(clone, lightboxBody.querySelector(".lightbox-caption"));
+          var caption = trigger.getAttribute("data-caption") || "";
+          var captionEl = lightboxBody.querySelector(".lightbox-caption");
+          if (captionEl) captionEl.textContent = caption;
+        }
+        lightbox.classList.add("open");
+        document.body.style.overflow = "hidden";
       });
       var closeBtn = lightbox.querySelector(".lightbox-close");
       function closeLightbox() {
@@ -132,6 +136,78 @@
       document.addEventListener("keydown", function (e) {
         if (e.key === "Escape") closeLightbox();
       });
+    }
+
+    /* ---- Gallery live feed -------------------------------------------------------- */
+    /* Replaces the fallback photos on gallery.html with the real, admin-managed set from
+       API_BASE + "/gallery.php" once it answers. Every one of the 8 filter categories is kept
+       in the output — a category with no published photo yet falls back to the page's own
+       "Photo Coming Soon" placeholder, exactly like the static markup did. If the fetch fails,
+       the fallback markup already in the page (today's real photos) is left exactly as-is. */
+    if (galleryGrid) {
+      var galleryCatLabels = {
+        classrooms: "Classrooms",
+        learning: "Learning",
+        play: "Play",
+        teachers: "Teachers",
+        meals: "Meals",
+        outdoor: "Outdoor Activities",
+        environment: "School Environment",
+        events: "Events",
+      };
+      fetch(API_BASE + "/gallery.php")
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data || !data.ok || !data.images) return;
+          var byCategory = {};
+          data.images.forEach(function (img) {
+            (byCategory[img.category] = byCategory[img.category] || []).push(img);
+          });
+          // Nothing published anywhere yet: keep the existing fallback rather than show an empty grid.
+          if (!data.images.length) return;
+
+          var html = "";
+          Object.keys(galleryCatLabels).forEach(function (cat) {
+            var label = galleryCatLabels[cat];
+            var items = byCategory[cat] || [];
+            if (!items.length) {
+              html += '<div class="gallery-item" data-category="' + cat + '">' +
+                '<div class="photo-placeholder"><i class="fa-solid fa-camera"></i><span>Photo Coming Soon</span></div>' +
+                '<span class="gallery-cat">' + label + "</span></div>";
+              return;
+            }
+            items.forEach(function (img) {
+              var caption = img.caption || "";
+              var alt = img.alt_text || caption || (label + " at Brookview Ridge Schools");
+              html += '<div class="gallery-item" data-category="' + cat + '" data-lightbox-trigger data-caption="' + escapeHtml(caption) + '">' +
+                '<img src="' + img.photo_url + '" alt="' + escapeHtml(alt) + '" loading="lazy">' +
+                '<span class="gallery-cat">' + label + "</span></div>";
+            });
+          });
+          galleryGrid.innerHTML = html;
+
+          // A filter other than "All" may already be active (fast network, quick click) — respect it.
+          var activeFilter = document.querySelector(".gallery-filter-btn.active");
+          var activeCat = activeFilter ? activeFilter.getAttribute("data-filter") : "all";
+          galleryGrid.querySelectorAll(".gallery-item").forEach(function (item) {
+            var show = activeCat === "all" || item.getAttribute("data-category") === activeCat;
+            item.style.display = show ? "" : "none";
+          });
+        })
+        .catch(function () {
+          /* Silently keep the fallback photos already in the page — nothing to do here. */
+        });
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    /* Shared by both the news feed and the single-article page below. */
+    function newsFormatDate(raw) {
+      return raw ? new Date(raw.replace(" ", "T")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
     }
 
     /* ---- Live enquiry forms (Contact, Admissions, Transport) --------------------- */
@@ -347,14 +423,14 @@
       document.querySelectorAll("[data-privacy-version]").forEach(function (el) { if (cfg.privacy_version) el.textContent = cfg.privacy_version; });
     });
 
-    /* ---- News & Events live feed --------------------------------------------------- */
-    /* Replaces the placeholder cards on news-events.html with real published posts
-       from API_BASE + "/news.php", when there are any. If the fetch fails or no
-       posts are published yet, the existing static placeholder content is left
-       exactly as-is — nothing is removed unless real posts are ready to show. */
+    /* ---- News & Events live feed: search + pagination ------------------------------ */
+    /* Replaces the placeholder cards on news-events.html with real published posts from
+       API_BASE + "/news.php", when there are any. If the first fetch fails or no posts are
+       published yet, the existing static placeholder content is left exactly as-is — nothing
+       is removed, and the search box / pagination stay hidden, unless real posts are ready. */
     var newsFeed = document.querySelector("[data-news-feed]");
     if (newsFeed) {
-      var categoryLabels = {
+      var newsCategoryLabels = {
         school_activities: "School Activities",
         parent_updates: "Parent Updates",
         events: "Events",
@@ -362,36 +438,164 @@
         announcements: "Announcements",
         celebrations: "Celebrations",
       };
-      fetch(API_BASE + "/news.php")
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (!data || !data.ok || !data.posts || !data.posts.length) return;
-          document.querySelectorAll("[data-news-placeholder]").forEach(function (el) {
-            el.style.display = "none";
+      var newsSearchForm = document.querySelector("[data-news-search]");
+      var newsPaginationEl = document.querySelector("[data-news-pagination]");
+      var newsState = { page: 1, q: "" };
+      var newsFirstLoad = true;
+
+      function renderNewsPagination(pagination) {
+        if (!newsPaginationEl) return;
+        if (!pagination || pagination.total_pages <= 1) { newsPaginationEl.innerHTML = ""; return; }
+        var html = "";
+        for (var p = 1; p <= pagination.total_pages; p++) {
+          html += '<button type="button" class="news-page-btn' + (p === pagination.page ? " active" : "") + '" data-news-page="' + p + '">' + p + "</button>";
+        }
+        newsPaginationEl.innerHTML = html;
+      }
+
+      function loadNews(page, q) {
+        newsState.page = page;
+        newsState.q = q;
+        var url = API_BASE + "/news.php?page=" + encodeURIComponent(page) + "&per_page=9";
+        if (q) url += "&q=" + encodeURIComponent(q);
+        fetch(url)
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (!data || !data.ok) return;
+
+            if (newsFirstLoad) {
+              if (!data.posts || !data.posts.length) return; // nothing published at all: keep the static fallback untouched
+              newsFirstLoad = false;
+              document.querySelectorAll("[data-news-placeholder]").forEach(function (el) { el.style.display = "none"; });
+              if (newsSearchForm) newsSearchForm.style.display = "flex";
+            }
+
+            newsFeed.innerHTML = "";
+            if (!data.posts || !data.posts.length) {
+              newsFeed.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--ink-soft);">No posts match your search.</p>';
+              renderNewsPagination(null);
+              return;
+            }
+
+            data.posts.forEach(function (post) {
+              var card = document.createElement("a");
+              card.className = "news-card";
+              card.href = "news-article.html?slug=" + encodeURIComponent(post.slug);
+              var mediaHtml = post.photo_url
+                ? '<img src="' + post.photo_url + '" alt="" loading="lazy">'
+                : '<div class="photo-placeholder"><i class="fa-solid fa-camera"></i></div>';
+              card.innerHTML =
+                '<div class="news-media">' + mediaHtml +
+                '<span class="news-tag">' + (newsCategoryLabels[post.category] || post.category) + '</span></div>' +
+                '<div style="padding:1.5rem;">' +
+                '<span class="news-date"><i class="fa-regular fa-calendar"></i> ' + newsFormatDate(post.published_at) + '</span>' +
+                '<h4 style="margin-top:0.5rem;">' + escapeHtml(post.title) + '</h4>' +
+                '<p style="color:var(--ink-soft);font-size:0.92rem;">' + escapeHtml(post.excerpt) + '</p></div>';
+              newsFeed.appendChild(card);
+            });
+
+            renderNewsPagination(data.pagination);
+          })
+          .catch(function () {
+            /* Silently keep whatever was already shown — nothing to do here. */
           });
-          newsFeed.innerHTML = "";
-          data.posts.forEach(function (post) {
-            var card = document.createElement("div");
-            card.className = "news-card";
-            var mediaHtml = post.photo_url
-              ? '<img src="' + post.photo_url + '" alt="" loading="lazy">'
-              : '<div class="photo-placeholder"><i class="fa-solid fa-camera"></i></div>';
-            var dateStr = post.published_at
-              ? new Date(post.published_at.replace(" ", "T")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
-              : "";
-            card.innerHTML =
-              '<div class="news-media">' + mediaHtml +
-              '<span class="news-tag">' + (categoryLabels[post.category] || post.category) + '</span></div>' +
-              '<div style="padding:1.5rem;">' +
-              '<span class="news-date"><i class="fa-regular fa-calendar"></i> ' + dateStr + '</span>' +
-              '<h4 style="margin-top:0.5rem;">' + post.title + '</h4>' +
-              '<p style="color:var(--ink-soft);font-size:0.92rem;">' + post.excerpt + '</p></div>';
-            newsFeed.appendChild(card);
-          });
-        })
-        .catch(function () {
-          /* Silently keep the static placeholder content — nothing to do here. */
+      }
+
+      if (newsSearchForm) {
+        newsSearchForm.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var q = (new FormData(newsSearchForm).get("q") || "").toString().trim();
+          loadNews(1, q);
         });
+      }
+      if (newsPaginationEl) {
+        newsPaginationEl.addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-news-page]");
+          if (!btn) return;
+          loadNews(parseInt(btn.getAttribute("data-news-page"), 10) || 1, newsState.q);
+        });
+      }
+
+      loadNews(1, "");
+    }
+
+    /* ---- News & Events: single article page (news-article.html) -------------------- */
+    /* Reads ?slug= from the URL and renders the full post, with related posts and
+       prev/next navigation, from API_BASE + "/news.php?slug=...". */
+    var articleWrap = document.querySelector("[data-article-body-wrap]");
+    if (articleWrap) {
+      var articleCategoryLabels = {
+        school_activities: "School Activities",
+        parent_updates: "Parent Updates",
+        events: "Events",
+        learning_moments: "Learning Moments",
+        announcements: "Announcements",
+        celebrations: "Celebrations",
+      };
+      var slug = new URLSearchParams(window.location.search).get("slug") || "";
+      var notFoundEl = document.querySelector("[data-article-notfound]");
+      var titleEl = document.querySelector("[data-article-title]");
+      var dateEl = document.querySelector("[data-article-date]");
+      var mediaEl = document.querySelector("[data-article-media]");
+      var tagEl = document.querySelector("[data-article-tag]");
+      var contentEl = document.querySelector("[data-article-content]");
+      var navEl = document.querySelector("[data-article-navlinks]");
+      var relatedSection = document.querySelector("[data-article-related-section]");
+      var relatedEl = document.querySelector("[data-article-related]");
+
+      function showArticleNotFound() {
+        if (titleEl) titleEl.textContent = "Post Not Found";
+        if (notFoundEl) notFoundEl.style.display = "block";
+      }
+
+      function relatedCardHtml(post) {
+        var mediaHtml = post.photo_url
+          ? '<img src="' + post.photo_url + '" alt="" loading="lazy">'
+          : '<div class="photo-placeholder"><i class="fa-solid fa-camera"></i></div>';
+        return '<a class="news-card" href="news-article.html?slug=' + encodeURIComponent(post.slug) + '">' +
+          '<div class="news-media">' + mediaHtml +
+          '<span class="news-tag">' + (articleCategoryLabels[post.category] || post.category) + '</span></div>' +
+          '<div style="padding:1.5rem;">' +
+          '<span class="news-date"><i class="fa-regular fa-calendar"></i> ' + newsFormatDate(post.published_at) + '</span>' +
+          '<h4 style="margin-top:0.5rem;">' + escapeHtml(post.title) + '</h4></div></a>';
+      }
+
+      function navLinkHtml(post, label, align) {
+        if (!post) return '<span></span>';
+        return '<a href="news-article.html?slug=' + encodeURIComponent(post.slug) + '" style="max-width:48%;text-align:' + align + ';text-decoration:none;color:var(--forest-dark);">' +
+          '<span style="display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);">' + label + '</span>' +
+          '<strong>' + escapeHtml(post.title) + '</strong></a>';
+      }
+
+      if (!slug) {
+        showArticleNotFound();
+      } else {
+        fetch(API_BASE + "/news.php?slug=" + encodeURIComponent(slug))
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (!data || !data.ok || !data.post) { showArticleNotFound(); return; }
+            var post = data.post;
+            document.title = post.title + " | Brookview Ridge Schools";
+            if (titleEl) titleEl.textContent = post.title;
+            if (dateEl) dateEl.textContent = newsFormatDate(post.published_at);
+            if (tagEl) tagEl.textContent = articleCategoryLabels[post.category] || post.category;
+            if (contentEl) contentEl.innerHTML = post.body;
+            if (mediaEl && post.photo_url) {
+              mediaEl.innerHTML = '<img src="' + post.photo_url + '" alt="" style="width:100%;display:block;">';
+              mediaEl.style.display = "block";
+            }
+            articleWrap.style.display = "block";
+
+            if (navEl) {
+              navEl.innerHTML = navLinkHtml(data.prev, "Previous", "left") + navLinkHtml(data.next, "Next", "right");
+            }
+            if (data.related && data.related.length && relatedEl && relatedSection) {
+              relatedEl.innerHTML = data.related.map(relatedCardHtml).join("");
+              relatedSection.style.display = "block";
+            }
+          })
+          .catch(function () { showArticleNotFound(); });
+      }
     }
 
   });

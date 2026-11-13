@@ -12,7 +12,7 @@
   --forest-secondary: #2A5248;
   --gold: #C9A227;
   --gold-light: #DEB84B;
-  --gold-dark: #A6841D;
+  --gold-dark: #886C18; /* darkened from #A6841D for WCAG AA contrast (4.5:1+) as small text on white/cream — used for the active nav link, eyebrow labels and accent icons */
   --cream: #F7F3EA;
   --cream-deep: #EFE8D8;
   --white: #FFFFFF;

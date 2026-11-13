@@ -60,6 +60,7 @@
     if (navToggle && navLinks) {
       navToggle.addEventListener("click", function () {
         var isOpen = navLinks.classList.toggle("open");
+        document.body.classList.toggle("mobile-menu-open", isOpen);
         navToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
         navToggle.innerHTML = isOpen
           ? '<i class="fa-solid fa-xmark"></i>'
@@ -68,6 +69,7 @@
       navLinks.querySelectorAll("a").forEach(function (link) {
         link.addEventListener("click", function () {
           navLinks.classList.remove("open");
+          document.body.classList.remove("mobile-menu-open");
           navToggle.setAttribute("aria-expanded", "false");
           navToggle.innerHTML = '<i class="fa-solid fa-bars"></i>';
         });
@@ -437,10 +439,12 @@
         learning_moments: "Learning Moments",
         announcements: "Announcements",
         celebrations: "Celebrations",
+        parenting_tips: "Parenting Tips",
       };
+      var newsFilterBtns = document.querySelectorAll(".news-filter-btn");
       var newsSearchForm = document.querySelector("[data-news-search]");
       var newsPaginationEl = document.querySelector("[data-news-pagination]");
-      var newsState = { page: 1, q: "" };
+      var newsState = { page: 1, q: "", category: "" };
       var newsFirstLoad = true;
 
       function renderNewsPagination(pagination) {
@@ -453,11 +457,13 @@
         newsPaginationEl.innerHTML = html;
       }
 
-      function loadNews(page, q) {
+      function loadNews(page, q, category) {
         newsState.page = page;
         newsState.q = q;
+        if (category !== undefined) newsState.category = category;
         var url = API_BASE + "/news.php?page=" + encodeURIComponent(page) + "&per_page=9";
         if (q) url += "&q=" + encodeURIComponent(q);
+        if (newsState.category) url += "&category=" + encodeURIComponent(newsState.category);
         fetch(url)
           .then(function (res) { return res.json(); })
           .then(function (data) {
@@ -468,6 +474,8 @@
               newsFirstLoad = false;
               document.querySelectorAll("[data-news-placeholder]").forEach(function (el) { el.style.display = "none"; });
               if (newsSearchForm) newsSearchForm.style.display = "flex";
+              var newsFiltersBar = document.querySelector("[data-news-filters]");
+              if (newsFiltersBar) newsFiltersBar.style.display = "flex";
             }
 
             newsFeed.innerHTML = "";
@@ -482,7 +490,7 @@
               card.className = "news-card";
               card.href = "news-article.html?slug=" + encodeURIComponent(post.slug);
               var mediaHtml = post.photo_url
-                ? '<img src="' + post.photo_url + '" alt="" loading="lazy">'
+                ? '<img src="' + post.photo_url + '" alt="' + escapeHtml(post.title) + '" loading="lazy">'
                 : '<div class="photo-placeholder"><i class="fa-solid fa-camera"></i></div>';
               card.innerHTML =
                 '<div class="news-media">' + mediaHtml +
@@ -515,6 +523,15 @@
           loadNews(parseInt(btn.getAttribute("data-news-page"), 10) || 1, newsState.q);
         });
       }
+      if (newsFilterBtns.length) {
+        newsFilterBtns.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            newsFilterBtns.forEach(function (b) { b.classList.remove("active"); });
+            btn.classList.add("active");
+            loadNews(1, newsState.q, btn.getAttribute("data-news-filter") || "");
+          });
+        });
+      }
 
       loadNews(1, "");
     }
@@ -531,6 +548,7 @@
         learning_moments: "Learning Moments",
         announcements: "Announcements",
         celebrations: "Celebrations",
+        parenting_tips: "Parenting Tips",
       };
       var slug = new URLSearchParams(window.location.search).get("slug") || "";
       var notFoundEl = document.querySelector("[data-article-notfound]");
@@ -550,7 +568,7 @@
 
       function relatedCardHtml(post) {
         var mediaHtml = post.photo_url
-          ? '<img src="' + post.photo_url + '" alt="" loading="lazy">'
+          ? '<img src="' + post.photo_url + '" alt="' + escapeHtml(post.title) + '" loading="lazy">'
           : '<div class="photo-placeholder"><i class="fa-solid fa-camera"></i></div>';
         return '<a class="news-card" href="news-article.html?slug=' + encodeURIComponent(post.slug) + '">' +
           '<div class="news-media">' + mediaHtml +
@@ -581,7 +599,7 @@
             if (tagEl) tagEl.textContent = articleCategoryLabels[post.category] || post.category;
             if (contentEl) contentEl.innerHTML = post.body;
             if (mediaEl && post.photo_url) {
-              mediaEl.innerHTML = '<img src="' + post.photo_url + '" alt="" style="width:100%;display:block;">';
+              mediaEl.innerHTML = '<img src="' + post.photo_url + '" alt="' + escapeHtml(post.title) + '" style="width:100%;display:block;">';
               mediaEl.style.display = "block";
             }
             articleWrap.style.display = "block";
